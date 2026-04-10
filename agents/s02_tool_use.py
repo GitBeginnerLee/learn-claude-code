@@ -177,7 +177,7 @@ def normalize_messages(messages: list) -> list:
     for msg in cleaned:
         if isinstance(msg.get("content"), list): #这里使用msg.get("content")这种写法的原因是若key不存在不会报错，而是返回none，msg.get("content")等价于msg["content"]，但是msg["content"]若不存在会报错。
             for block in msg["content"]:
-                if isinstance(block, dict) and block.get("type") == "tool_result":
+                if isinstance(block, dict) and block.get("type") == "tool_result": #这里收集的是所有tool_result的tool_use_id
                     existing_results.add(block.get("tool_use_id"))
 
     # Find orphaned tool_use blocks and insert placeholder results
@@ -188,6 +188,7 @@ def normalize_messages(messages: list) -> list:
             if not isinstance(block, dict): #过滤掉不是字典的消息。
                 continue
             if block.get("type") == "tool_use" and block.get("id") not in existing_results: #过滤掉不是工具使用消息和不是工具使用消息ID的消息。
+                # 这里筛选的其实是API返回了tool_use指令，但是不知道什么原因指令并没有执行，可能是用户中断流程或者其他原因，所以这里补充的是哪些未被执行的tool_use指令的tool_result
                 cleaned.append({"role": "user", "content": [
                     {"type": "tool_result", "tool_use_id": block["id"],
                      "content": "(cancelled)"}
