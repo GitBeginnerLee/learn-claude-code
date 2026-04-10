@@ -8,6 +8,46 @@ and a normalize_messages() function that cleans up the message list before
 each API call.
 
 Key insight: "The loop didn't change at all. I just added tools."
+
+
+整体思路流程：
+导入环境和包
+
+1、准备调用API参数
+    client
+    model
+    system
+    tools：schema
+
+2、工具调用入口：TOOL_HANDLERS
+
+3、创建当前workplace路径：workdir
+4、tools指令前置安全沙箱：safe_path
+
+5、tools内指令函数：
+    run_bash
+    run_read
+    run_write
+    run_edit
+
+6、messages合规处理：
+
+    由于API协议硬性约束：
+        只接受协议定义的字段 (内部元数据会导致 400 错误)
+        每个 tool_use 块必须有匹配的 tool_result (通过 tool_use_id 关联)
+        user / assistant 消息必须严格交替 (不能连续两条同角色)
+
+
+1）messages结构规范化
+2）tool_use配对，缺失tool_result则补充占位符
+    收集tool_use_id
+    将messages中tool_use block中tool_use_id匹配，缺失的补充占位符
+3）将messages中连续role相同的做合并
+
+7、设置agent loop
+
+8、设置初始化流程__main__
+
 """
 
 import os
