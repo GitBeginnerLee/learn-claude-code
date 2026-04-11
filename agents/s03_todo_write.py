@@ -24,7 +24,7 @@ if os.getenv("ANTHROPIC_BASE_URL"):
 WORKDIR = Path.cwd()
 client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
-PLAN_REMINDER_INTERVAL = 3
+PLAN_REMINDER_INTERVAL = 3 #添加了每条计划的最大等待回合数
 
 SYSTEM = f"""You are a coding agent at {WORKDIR}.
 Use the todo tool for multi-step work.
@@ -33,14 +33,14 @@ Refresh the plan as work advances. Prefer tools over prose."""
 
 
 @dataclass
-class PlanItem:
+class PlanItem: #计划条目类，用于存储计划条目的内容、状态和活动形式。
     content: str
     status: str = "pending"
     active_form: str = ""
 
 
 @dataclass
-class PlanningState:
+class PlanningState: #计划状态类，用于存储计划条目列表和回合数。
     items: list[PlanItem] = field(default_factory=list)
     rounds_since_update: int = 0
 
@@ -50,21 +50,21 @@ class TodoManager:
         self.state = PlanningState()
 
     def update(self, items: list) -> str:
-        if len(items) > 12:
-            raise ValueError("Keep the session plan short (max 12 items)")
+        if len(items) > 12: #如果计划条目列表长度大于12，则抛出错误。
+            raise ValueError("Keep the session plan short (max 12 items)") #示例：Keep the session plan short (max 12 items)
 
         normalized = []
         in_progress_count = 0
-        for index, raw_item in enumerate(items):
+        for index, raw_item in enumerate(items): #enumerate(可迭代对象) 会返回一个迭代器，遍历原序列时逐项产生：(0, 第0个元素), (1, 第1个元素), (2, 第2个元素), ...
             content = str(raw_item.get("content", "")).strip()
             status = str(raw_item.get("status", "pending")).lower()
             active_form = str(raw_item.get("activeForm", "")).strip()
 
-            if not content:
+            if not content: #如果计划条目的内容为空，则抛出错误。
                 raise ValueError(f"Item {index}: content required")
-            if status not in {"pending", "in_progress", "completed"}:
+            if status not in {"pending", "in_progress", "completed"}: #如果计划条目的状态不在pending、in_progress或completed，则抛出错误。
                 raise ValueError(f"Item {index}: invalid status '{status}'")
-            if status == "in_progress":
+            if status == "in_progress": #如果计划条目的状态为in_progress，则计数器加1。
                 in_progress_count += 1
 
             normalized.append(PlanItem(
@@ -73,7 +73,7 @@ class TodoManager:
                 active_form=active_form,
             ))
 
-        if in_progress_count > 1:
+        if in_progress_count > 1: #设置的是status为in_progress的计划条目最多只能有1条。
             raise ValueError("Only one plan item can be in_progress")
 
         self.state.items = normalized
@@ -84,14 +84,14 @@ class TodoManager:
         self.state.rounds_since_update += 1
 
     def reminder(self) -> str | None:
-        if not self.state.items:
+        if not self.state.items: #如果计划条目列表为空，则返回None。
             return None
-        if self.state.rounds_since_update < PLAN_REMINDER_INTERVAL:
+        if self.state.rounds_since_update < PLAN_REMINDER_INTERVAL: #如果回合数小于每条计划的最大等待回合数，则返回None。
             return None
-        return "<reminder>Refresh your current plan before continuing.</reminder>"
+        return "<reminder>Refresh your current plan before continuing.</reminder>" #如果回合数大于每条计划的最大等待回合数，则返回提醒信息。
 
     def render(self) -> str:
-        if not self.state.items:
+        if not self.state.items: #如果计划条目列表为空，则返回"No session plan yet."。
             return "No session plan yet."
 
         lines = []
@@ -100,14 +100,14 @@ class TodoManager:
                 "pending": "[ ]",
                 "in_progress": "[>]",
                 "completed": "[x]",
-            }[item.status]
-            line = f"{marker} {item.content}"
-            if item.status == "in_progress" and item.active_form:
-                line += f" ({item.active_form})"
+                    }[item.status] #这里其实是根据{}字典取item.status对应的值。
+            line = f"{marker} {item.content}" #示例：[>] 阅读 s03_todo_write.py 中的 TodoManager
+            if item.status == "in_progress" and item.active_form: #如果计划条目的状态为in_progress且active_form不为空，追加active_form。
+                line += f" ({item.active_form})" #示例：[>] 阅读 s03_todo_write.py 中的 TodoManager (Reading the failing test)
             lines.append(line)
 
-        completed = sum(1 for item in self.state.items if item.status == "completed")
-        lines.append(f"\n({completed}/{len(self.state.items)} completed)")
+        completed = sum(1 for item in self.state.items if item.status == "completed") #计算已完成计划条目的数量。
+        lines.append(f"\n({completed}/{len(self.state.items)} completed)") #示例：\n(1/3 completed)
         return "\n".join(lines)
 
 
@@ -178,7 +178,7 @@ TOOL_HANDLERS = {
     "read_file": lambda **kw: run_read(kw["path"], kw.get("limit")),
     "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
     "edit_file": lambda **kw: run_edit(kw["path"], kw["old_text"], kw["new_text"]),
-    "todo": lambda **kw: TODO.update(kw["items"]),
+    "todo": lambda **kw: TODO.update(kw["items"]), #工具分发器中添加了todo工具，用于更新计划。
 }
 
 TOOLS = [
@@ -228,7 +228,7 @@ TOOLS = [
             "required": ["path", "old_text", "new_text"],
         },
     },
-    {
+    { #添加了todo工具，用于更新计划。
         "name": "todo",
         "description": "Rewrite the current session plan for multi-step work.",
         "input_schema": {
@@ -281,22 +281,23 @@ def agent_loop(messages: list) -> None:
         )
         messages.append({"role": "assistant", "content": response.content})
 
-        if response.stop_reason != "tool_use":
+        if response.stop_reason != "tool_use": #如果响应的停止原因不是tool_use，则返回。说明模型没有调用工具，任务完成。
             return
 
         results = []
         used_todo = False
         for block in response.content:
-            if block.type != "tool_use":
+            if block.type != "tool_use": #如果块的类型不是tool_use，则跳过。
                 continue
 
             handler = TOOL_HANDLERS.get(block.name)
             try:
-                output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                output = handler(**block.input) if handler else f"Unknown tool: {block.name}" 
+                #调用todu_update()-->render()输出一串文本：'[ ] 任务A\n[>] 任务B\n(1/2 completed)'
             except Exception as exc:
                 output = f"Error: {exc}"
 
-            print(f"> {block.name}: {str(output)[:200]}")
+            print(f"> {block.name}: {str(output)[:200]}") #打印todo调用，拼接计划执行情况
             results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
