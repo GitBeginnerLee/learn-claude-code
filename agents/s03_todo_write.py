@@ -49,7 +49,7 @@ class TodoManager:
     def __init__(self):
         self.state = PlanningState()
 
-    def update(self, items: list) -> str:
+    def update(self, items: list) -> str: #这个函数的作用是整理AI返回的items，然后交给render输出成一串字符串加入到messages
         if len(items) > 12: #如果计划条目列表长度大于12，则抛出错误。
             raise ValueError("Keep the session plan short (max 12 items)") #示例：Keep the session plan short (max 12 items)
 
@@ -83,14 +83,14 @@ class TodoManager:
     def note_round_without_update(self) -> None:
         self.state.rounds_since_update += 1
 
-    def reminder(self) -> str | None:
+    def reminder(self) -> str | None: #这个函数的用处是监控单个计划项的执行轮次然后提醒AI更新计划项
         if not self.state.items: #如果计划条目列表为空，则返回None。
             return None
         if self.state.rounds_since_update < PLAN_REMINDER_INTERVAL: #如果回合数小于每条计划的最大等待回合数，则返回None。
             return None
         return "<reminder>Refresh your current plan before continuing.</reminder>" #如果回合数大于每条计划的最大等待回合数，则返回提醒信息。
 
-    def render(self) -> str:
+    def render(self) -> str: #这个函数的用处是把items处理成一串文本添加到messages中方便AI阅读
         if not self.state.items: #如果计划条目列表为空，则返回"No session plan yet."。
             return "No session plan yet."
 
@@ -259,12 +259,12 @@ TOOLS = [
 ]
 
 
-def extract_text(content) -> str:
+def extract_text(content) -> str: #这个函数的用处是让最后client端只输出text文本
     if not isinstance(content, list):
         return ""
     texts = []
     for block in content:
-        text = getattr(block, "text", None)
+        text = getattr(block, "text", None) #尽量读 block.text，没有就当 None
         if text:
             texts.append(text)
     return "\n".join(texts).strip()

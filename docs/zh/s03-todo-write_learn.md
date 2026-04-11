@@ -1275,7 +1275,108 @@ content = str(raw_item.get("content", "")).strip()
 
 ---
 
+## 第 20 轮
+
+### 用户
+
+@agents/s03_todo_write.py:267 请分析这句代码使用了什么语法，并举例说明
+
+（附代码选段：）
+
+```python
+        text = getattr(block, "text", None)
+```
+
+### 助手
+
+## 这句用的是什么
+
+用的是 Python 内置函数 **`getattr`**，按**名字**去读对象的属性；若属性不存在，返回你给的**默认值**，而不是抛错。
+
+```python
+text = getattr(block, "text", None)
+```
+
+等价于「尽量读 `block.text`，没有就当 `None`」。
+
+---
+
+## `getattr` 的写法
+
+```text
+getattr(对象, "属性名字符串", 默认值)
+```
+
+- 第 1 个参数：任意对象 **`block`**（这里是 API 返回的某条 `content` 块）。  
+- 第 2 个参数：属性名，必须是 **字符串**（这里是 **`"text"`**）。  
+- 第 3 个参数：可选；**没有该属性时**返回什么（这里是 **`None`**）。  
+  若省略第 3 个参数且属性不存在，会 **`AttributeError`**。
+
+---
+
+## 在本函数里为什么这样写
+
+`extract_text` 在遍历 `content` 里**多种块**：有的类型有 **`text`**（纯文本块），有的类型没有（例如 **`tool_use`**）。用 **`getattr(..., None)`** 可以统一写成一行：**有 `text` 就取出，没有就得到 `None`**，下面 `if text:` 再过滤掉。
+
+```262:270:D:\个人文件\python\claude_learn\learn-claude-code\agents\s03_todo_write.py
+def extract_text(content) -> str:
+    if not isinstance(content, list):
+        return ""
+    texts = []
+    for block in content:
+        text = getattr(block, "text", None)
+        if text:
+            texts.append(text)
+    return "\n".join(texts).strip()
+```
+
+---
+
+## 小例子
+
+```python
+class TextBlock:
+    text = "你好"
+
+class ToolBlock:
+    name = "bash"
+
+getattr(TextBlock(), "text", None)   # '你好'
+getattr(ToolBlock(), "text", None)   # None（没有 text 属性）
+```
+
+若不用 `getattr`，要写：
+
+```python
+text = block.text if hasattr(block, "text") else None
+# 或 try/except AttributeError
+```
+
+`getattr` 是常见简写。
+
+---
+
+## 和 `block.text` 的对比
+
+- **`block.text`**：没有该属性就 **`AttributeError`**。  
+- **`getattr(block, "text", None)`**：没有则 **`None`**，适合「多种块混在同一列表里」的场景。
+
+---
+
+## 第 21 轮
+
+### 用户
+
+把本次chat的最后两次对话消息记录完整的追加写入到docs/zh/s03-todo-write_learn.md中，不要总结，不要删减
+
+### 助手
+
+已按你的要求，在 `docs/zh/s03-todo-write_learn.md` 中于「文档末尾说明」一节之前**完整追加**第 20 轮与第 21 轮：第 20 轮全文见上一节；第 21 轮即本节用户消息与本节助手回复。对第 20 轮助手回复的正文未做摘要或删减。
+
+---
+
 ## 文档末尾说明
 
 - 文件路径：`docs/zh/s03-todo-write_learn.md`
 - 若仓库中 `agents/s03_todo_write.py` 行号或片段与用户当时 IDE 中略有差异，以当时对话中引用的版本为准；文中保留了对话里出现的文件路径引用格式（如 `D:\...\s03_todo_write.py` 行号引用）。
+- 第 20、21 轮在文档初次创建之后追加写入。
