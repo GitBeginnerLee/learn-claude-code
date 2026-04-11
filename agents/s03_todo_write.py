@@ -297,7 +297,7 @@ def agent_loop(messages: list) -> None:
             except Exception as exc:
                 output = f"Error: {exc}"
 
-            print(f"> {block.name}: {str(output)[:200]}") #打印todo调用，拼接计划执行情况
+            print(f"> {block.name}: {str(output)[:200]}") #打印todo调用，拼接计划执行情况。 #打印tool_use调用结果
             results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
@@ -306,11 +306,13 @@ def agent_loop(messages: list) -> None:
             if block.name == "todo":
                 used_todo = True
 
-        if used_todo:
+        if used_todo: 
+            #这里的逻辑涉及到AI的返回信息，在in_progress只有一个的情况下，AI在完成一条计划项之前不会再次调用todo工具
+            #就是说只要没有调用todo工具就说明AI的tool_use卡在了某一个计划项，所以要记录执行轮次并监督，超过3次之后强制提醒AI更新计划，即调用todo工具
             TODO.state.rounds_since_update = 0
         else:
-            TODO.note_round_without_update()
-            reminder = TODO.reminder()
+            TODO.note_round_without_update() #记录当前计划执行轮次
+            reminder = TODO.reminder() #如果rounds_since_update大于3，插入提醒AI更新计划
             if reminder:
                 results.insert(0, {"type": "text", "text": reminder})
 
