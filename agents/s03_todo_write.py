@@ -6,6 +6,57 @@ s03_todo_write.py - Session Planning with TodoWrite
 This chapter is about a lightweight session plan, not a durable task graph.
 The model can rewrite its current plan, keep one active step in focus, and get
 nudged if it stops refreshing the plan for too many rounds.
+
+
+
+1、导入环境和包
+
+2、准备调用API参数
+	client
+	model
+	system
+	tools：schema
+
+3、创建两个类对象--方便后续直接使用类对象数据结构
+	PlanItem
+	PlanningState
+
+4、设置PLAN_REMINDER_INTERVAL计划项最大执行轮次
+
+5、创建todomanager类对象
+	update方法：将API response的items整理成特定数据格式
+	render方法：将update()之后的ltems处理成一串Str，记录到messages中
+	note_round_without_update方法：记录没有调用update()的次数，即items中单个计划项的执行轮次
+	reminder方法：监控rounds_since_update超过PLAN_REMINDER_INTERVAL时向messages中插入提醒：更新items计划
+
+
+
+6、工具调用入口：TOOL_HANDLERS
+
+7、创建当前workplace路径：workdir
+8、tools指令前置安全沙箱：safe_path
+
+9、tools内指令函数：
+	run_bash
+	run_read
+	run_write
+	run_edit
+	todomanager
+
+10、设置extract_text确保client端最终输出文本
+
+11、设置agent loop
+	发送请求响应
+	接受响应response，判断结束或者tool_use调用
+	TOOL_HANDLERS中寻找tool
+	output接收tool执行结果
+		增加了一个todo的监控判断，即记录tool_use的执行轮次
+		追加messages提醒更新items计划项
+	result追加到messages
+
+12、设置初始化流程__name__
+
+
 """
 
 import os
