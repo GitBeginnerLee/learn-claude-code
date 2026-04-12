@@ -61,7 +61,7 @@ client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 
 SYSTEM = f"You are a coding agent at {WORKDIR}. Use the task tool to delegate exploration or subtasks."
-SUBAGENT_SYSTEM = f"You are a coding subagent at {WORKDIR}. Complete the given task, then summarize your findings."
+SUBAGENT_SYSTEM = f"You are a coding subagent at {WORKDIR}. Complete the given task, then summarize your findings." #新增一个sub_agent的system声明
 
 
 class AgentTemplate:
@@ -73,6 +73,16 @@ class AgentTemplate:
     model, effort, permissionMode, maxTurns, memory, isolation, color,
     background, initialPrompt, mcpServers.
     3 sources: built-in, custom (.claude/agents/), plugin-provided.
+
+
+    这是一个模板解析器，用来解析角色智能体的配置文件，本代码文件中没有使用这个解析器
+    创建ai_agent = AgentTemplate(path)
+    1、读取配置文件路径
+    2、读取文件名
+    3、创建config配置信息空集
+    4、系统提示词
+    5、启动解析程序：_parse()
+
     """
     def __init__(self, path):
         self.path = Path(path)
@@ -83,7 +93,7 @@ class AgentTemplate:
 
     def _parse(self):
         text = self.path.read_text()
-        match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", text, re.DOTALL)
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", text, re.DOTALL) #正则表达式，注意：正则表达式是逐字符匹配，匹配失败就返回none，匹配成功后group中的数据格式是字符串
         if not match:
             self.system_prompt = text
             return
@@ -146,7 +156,7 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
         return f"Error: {e}"
 
 
-TOOL_HANDLERS = {
+TOOL_HANDLERS = { #缺少task调用方法，不知道准备用什么方式调用？？？？？？？？？？？？？？？？？？？？？？？？？？
     "bash":       lambda **kw: run_bash(kw["command"]),
     "read_file":  lambda **kw: run_read(kw["path"], kw.get("limit")),
     "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
@@ -185,13 +195,29 @@ def run_subagent(prompt: str) -> str:
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)[:50000]})
         sub_messages.append({"role": "user", "content": results})
     # Only the final text returns to the parent -- child context is discarded
-    return "".join(b.text for b in response.content if hasattr(b, "text")) or "(no summary)"
+    return "".join(b.text for b in response.content if hasattr(b, "text")) or "(no summary)" #这里的A or B：若 A 为假值（如 ""、None、0），表达式结果为 B。
 
 
 # -- Parent tools: base tools + task dispatcher --
 PARENT_TOOLS = CHILD_TOOLS + [
-    {"name": "task", "description": "Spawn a subagent with fresh context. It shares the filesystem but not conversation history.",
-     "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "description": {"type": "string", "description": "Short description of the task"}}, "required": ["prompt"]}},
+    {
+        "name": "task",
+        "description": (
+            "Spawn a subagent with fresh context. "
+            "It shares the filesystem but not conversation history."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "description": {
+                    "type": "string",
+                    "description": "Short description of the task",
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
 ]
 
 
@@ -208,10 +234,10 @@ def agent_loop(messages: list):
         for block in response.content:
             if block.type == "tool_use":
                 if block.name == "task":
-                    desc = block.input.get("description", "subtask")
+                    desc = block.input.get("description", "subtask") #复习函数get()，dict中是否存在key=description，若不存在返回"subtask"
                     prompt = block.input.get("prompt", "")
                     print(f"> task ({desc}): {prompt[:80]}")
-                    output = run_subagent(prompt)
+                    output = run_subagent(prompt)                   #没有使用TOOL_HANDLERS工具分发入口，而是直接使用了自定义方法
                 else:
                     handler = TOOL_HANDLERS.get(block.name)
                     output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
@@ -234,6 +260,6 @@ if __name__ == "__main__":
         response_content = history[-1]["content"]
         if isinstance(response_content, list):
             for block in response_content:
-                if hasattr(block, "text"):
+                if hasattr(block, "text"): #再次复习一遍，hasattr函数判断block中是否存在属性text，存在返回true
                     print(block.text)
         print()
