@@ -29,23 +29,23 @@ if os.getenv("ANTHROPIC_BASE_URL"):
 WORKDIR = Path.cwd()
 client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
-SKILLS_DIR = WORKDIR / "skills"
+SKILLS_DIR = WORKDIR / "skills" #新增skills文件path
 
 
 @dataclass
-class SkillManifest:
+class SkillManifest:    #创建类对象：技能清单数据结构
     name: str
     description: str
     path: Path
 
 
 @dataclass
-class SkillDocument:
+class SkillDocument:    #创建类对象：skills使用文档数据结构
     manifest: SkillManifest
     body: str
 
 
-class SkillRegistry:
+class SkillRegistry:    #创建类对象：skill注册表
     def __init__(self, skills_dir: Path):
         self.skills_dir = skills_dir
         self.documents: dict[str, SkillDocument] = {}
@@ -62,7 +62,7 @@ class SkillRegistry:
             manifest = SkillManifest(name=name, description=description, path=path)
             self.documents[name] = SkillDocument(manifest=manifest, body=body.strip())
 
-    def _parse_frontmatter(self, text: str) -> tuple[dict, str]:
+    def _parse_frontmatter(self, text: str) -> tuple[dict, str]:    #这个方法应该是做skill文档结构化输出的
         match = re.match(r"^---\n(.*?)\n---\n(.*)", text, re.DOTALL)
         if not match:
             return {}, text
@@ -75,7 +75,7 @@ class SkillRegistry:
             meta[key.strip()] = value.strip()
         return meta, match.group(2)
 
-    def describe_available(self) -> str:
+    def describe_available(self) -> str:    #应该是skill目录
         if not self.documents:
             return "(no skills available)"
         lines = []
@@ -84,7 +84,7 @@ class SkillRegistry:
             lines.append(f"- {manifest.name}: {manifest.description}")
         return "\n".join(lines)
 
-    def load_full_text(self, name: str) -> str:
+    def load_full_text(self, name: str) -> str: #这个应该是skill正文
         document = self.documents.get(name)
         if not document:
             known = ", ".join(sorted(self.documents)) or "(none)"
@@ -104,7 +104,7 @@ Use load_skill when a task needs specialized instructions before you act.
 
 Skills available:
 {SKILL_REGISTRY.describe_available()}
-"""
+"""     #在system信息中加入了skill技能清单
 
 
 def safe_path(path_str: str) -> Path:
@@ -171,7 +171,7 @@ TOOL_HANDLERS = {
     "read_file": lambda **kw: run_read(kw["path"], kw.get("limit")),
     "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
     "edit_file": lambda **kw: run_edit(kw["path"], kw["old_text"], kw["new_text"]),
-    "load_skill": lambda **kw: SKILL_REGISTRY.load_full_text(kw["name"]),
+    "load_skill": lambda **kw: SKILL_REGISTRY.load_full_text(kw["name"]),   #添加了load_skill工具
 }
 
 TOOLS = [
@@ -221,7 +221,7 @@ TOOLS = [
             "required": ["path", "old_text", "new_text"],
         },
     },
-    {
+    {   #skill工具响应数据结构
         "name": "load_skill",
         "description": "Load the full body of a named skill into the current context.",
         "input_schema": {
