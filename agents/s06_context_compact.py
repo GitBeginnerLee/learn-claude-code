@@ -38,26 +38,26 @@ SYSTEM = (
     "Keep working step by step, and use compact if the conversation gets too long."
 )
 
-CONTEXT_LIMIT = 50000
-KEEP_RECENT_TOOL_RESULTS = 3
-PERSIST_THRESHOLD = 30000
-PREVIEW_CHARS = 2000
-TRANSCRIPT_DIR = WORKDIR / ".transcripts"
-TOOL_RESULTS_DIR = WORKDIR / ".task_outputs" / "tool-results"
+CONTEXT_LIMIT = 50000   #content限制长度
+KEEP_RECENT_TOOL_RESULTS = 3    #tool_results保留层数
+PERSIST_THRESHOLD = 30000   #压缩临界点长度
+PREVIEW_CHARS = 2000    #预览文本长度
+TRANSCRIPT_DIR = WORKDIR / ".transcripts"   #文字稿文件路径
+TOOL_RESULTS_DIR = WORKDIR / ".task_outputs" / "tool-results"   #tool_resluts文件路径
 
 
 @dataclass
-class CompactState:
+class CompactState: #定义压缩状态CompactState类对象数据结果
     has_compacted: bool = False
     last_summary: str = ""
     recent_files: list[str] = field(default_factory=list)
 
 
-def estimate_context_size(messages: list) -> int:
+def estimate_context_size(messages: list) -> int:   #预估context长度
     return len(str(messages))
 
 
-def track_recent_file(state: CompactState, path: str) -> None:
+def track_recent_file(state: CompactState, path: str) -> None:  #不知道干嘛用的？？？？？？？？？？？？？
     if path in state.recent_files:
         state.recent_files.remove(path)
     state.recent_files.append(path)
@@ -72,7 +72,7 @@ def safe_path(path_str: str) -> Path:
     return path
 
 
-def persist_large_output(tool_use_id: str, output: str) -> str:
+def persist_large_output(tool_use_id: str, output: str) -> str: #应该是保留需要保留完成输出的context内容
     if len(output) <= PERSIST_THRESHOLD:
         return output
 
@@ -92,7 +92,7 @@ def persist_large_output(tool_use_id: str, output: str) -> str:
     )
 
 
-def collect_tool_result_blocks(messages: list) -> list[tuple[int, int, dict]]:
+def collect_tool_result_blocks(messages: list) -> list[tuple[int, int, dict]]:  #应该是整理tool_results结果的
     blocks = []
     for message_index, message in enumerate(messages):
         content = message.get("content")
@@ -104,7 +104,7 @@ def collect_tool_result_blocks(messages: list) -> list[tuple[int, int, dict]]:
     return blocks
 
 
-def micro_compact(messages: list) -> list:
+def micro_compact(messages: list) -> list:  #应该是压缩tool_use使用结果的，即压缩tool_results
     tool_results = collect_tool_result_blocks(messages)
     if len(tool_results) <= KEEP_RECENT_TOOL_RESULTS:
         return messages
@@ -117,7 +117,7 @@ def micro_compact(messages: list) -> list:
     return messages
 
 
-def write_transcript(messages: list) -> Path:
+def write_transcript(messages: list) -> Path:   #不知道干嘛用的？？？？？？？？？？？？？？？
     TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True)
     path = TRANSCRIPT_DIR / f"transcript_{int(time.time())}.jsonl"
     with path.open("w") as handle:
@@ -126,7 +126,7 @@ def write_transcript(messages: list) -> Path:
     return path
 
 
-def summarize_history(messages: list) -> str:
+def summarize_history(messages: list) -> str:   #应该是对历史记录做摘要的
     conversation = json.dumps(messages, default=str)[:80000]
     prompt = (
         "Summarize this coding-agent conversation so work can continue.\n"
@@ -147,7 +147,7 @@ def summarize_history(messages: list) -> str:
     return response.content[0].text.strip()
 
 
-def compact_history(messages: list, state: CompactState, focus: str | None = None) -> list:
+def compact_history(messages: list, state: CompactState, focus: str | None = None) -> list: #应该是压缩context历史纪录的
     transcript_path = write_transcript(messages)
     print(f"[transcript saved: {transcript_path}]")
 
@@ -271,7 +271,7 @@ TOOLS = [
             "required": ["path", "old_text", "new_text"],
         },
     },
-    {
+    {   #新增文件压缩工具
         "name": "compact",
         "description": "Summarize earlier conversation so work can continue in a smaller context.",
         "input_schema": {
@@ -295,7 +295,7 @@ def extract_text(content) -> str:
     return "\n".join(texts).strip()
 
 
-def execute_tool(block, state: CompactState) -> str:
+def execute_tool(block, state: CompactState) -> str:    #tools_handlers工具分发写成了一个execute_tool方法
     if block.name == "bash":
         return run_bash(block.input["command"], block.id)
     if block.name == "read_file":
