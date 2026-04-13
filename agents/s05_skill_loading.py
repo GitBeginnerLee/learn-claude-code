@@ -55,15 +55,15 @@ class SkillRegistry:    #创建类对象：skill注册表
         if not self.skills_dir.exists():
             return
 
-        for path in sorted(self.skills_dir.rglob("SKILL.md")):
+        for path in sorted(self.skills_dir.rglob("SKILL.md")): #找出skill_dir目录下所有的skill.md，然后排序组成列表，列表对象是path
             meta, body = self._parse_frontmatter(path.read_text())
-            name = meta.get("name", path.parent.name)
+            name = meta.get("name", path.parent.name)       #父目录路径的 最后一段名字（字符串），例如 .../foo/SKILL.md → "foo"
             description = meta.get("description", "No description")
             manifest = SkillManifest(name=name, description=description, path=path)
             self.documents[name] = SkillDocument(manifest=manifest, body=body.strip())
 
     def _parse_frontmatter(self, text: str) -> tuple[dict, str]:    #这个方法应该是做skill文档结构化输出的
-        match = re.match(r"^---\n(.*?)\n---\n(.*)", text, re.DOTALL)
+        match = re.match(r"^---\n(.*?)\n---\n(.*)", text, re.DOTALL) #正则解析text
         if not match:
             return {}, text
 
@@ -73,9 +73,9 @@ class SkillRegistry:    #创建类对象：skill注册表
                 continue
             key, value = line.split(":", 1)
             meta[key.strip()] = value.strip()
-        return meta, match.group(2)
+        return meta, match.group(2) #返回skill描述和skill正文
 
-    def describe_available(self) -> str:    #应该是skill目录
+    def describe_available(self) -> str:    #应该是skill目录 --》确实如此
         if not self.documents:
             return "(no skills available)"
         lines = []
@@ -87,7 +87,7 @@ class SkillRegistry:    #创建类对象：skill注册表
     def load_full_text(self, name: str) -> str: #这个应该是skill正文
         document = self.documents.get(name)
         if not document:
-            known = ", ".join(sorted(self.documents)) or "(none)"
+            known = ", ".join(sorted(self.documents)) or "(none)" #这里是将self.document的所有key，也就是"name"列出来
             return f"Error: Unknown skill '{name}'. Available skills: {known}"
 
         return (
