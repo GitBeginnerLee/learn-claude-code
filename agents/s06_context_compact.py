@@ -39,7 +39,7 @@ SYSTEM = (
 )
 
 CONTEXT_LIMIT = 50000   #content限制长度
-KEEP_RECENT_TOOL_RESULTS = 3    #tool_results保留层数
+KEEP_RECENT_TOOL_RESULTS = 3    #tool_results保留结果数量
 PERSIST_THRESHOLD = 30000   #压缩临界点长度
 PREVIEW_CHARS = 2000    #预览文本长度
 TRANSCRIPT_DIR = WORKDIR / ".transcripts"   #文字稿文件路径
@@ -57,7 +57,7 @@ def estimate_context_size(messages: list) -> int:   #预估context长度
     return len(str(messages))
 
 
-def track_recent_file(state: CompactState, path: str) -> None:  #不知道干嘛用的？？？？？？？？？？？？？
+def track_recent_file(state: CompactState, path: str) -> None:  #最近使用文件列表，API最近读取的文件目录
     if path in state.recent_files:
         state.recent_files.remove(path)
     state.recent_files.append(path)
@@ -72,8 +72,8 @@ def safe_path(path_str: str) -> Path:
     return path
 
 
-def persist_large_output(tool_use_id: str, output: str) -> str: #应该是保留需要保留完成输出的context内容
-    if len(output) <= PERSIST_THRESHOLD:
+def persist_large_output(tool_use_id: str, output: str) -> str: # 将超出限制的tool_results提前进行压缩并取摘要
+    if len(output) <= PERSIST_THRESHOLD: #如果tool_results没有超过限制长度
         return output
 
     TOOL_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -81,7 +81,7 @@ def persist_large_output(tool_use_id: str, output: str) -> str: #应该是保留
     if not stored_path.exists():
         stored_path.write_text(output)
 
-    preview = output[:PREVIEW_CHARS]
+    preview = output[:PREVIEW_CHARS] #截取output的前PREVIEW_CHARS部分内容
     rel_path = stored_path.relative_to(WORKDIR)
     return (
         "<persisted-output>\n"
@@ -92,42 +92,42 @@ def persist_large_output(tool_use_id: str, output: str) -> str: #应该是保留
     )
 
 
-def collect_tool_result_blocks(messages: list) -> list[tuple[int, int, dict]]:  #应该是整理tool_results结果的
+def collect_tool_result_blocks(messages: list) -> list[tuple[int, int, dict]]:  #应该是整理tool_results结果的，只是不是处理结果，而是将tool_results加上索引方便引用
     blocks = []
     for message_index, message in enumerate(messages):
         content = message.get("content")
-        if message.get("role") != "user" or not isinstance(content, list):
+        if message.get("role") != "user" or not isinstance(content, list): #过滤掉assistant的信息和历史消息中context被压缩过的信息
             continue
         for block_index, block in enumerate(content):
             if isinstance(block, dict) and block.get("type") == "tool_result":
-                blocks.append((message_index, block_index, block))
-    return blocks
+                blocks.append((message_index, block_index, block)) #将tool_results收集并加上索引
+    return blocks #收集了所有tool_results存在内存中
 
 
 def micro_compact(messages: list) -> list:  #应该是压缩tool_use使用结果的，即压缩tool_results
     tool_results = collect_tool_result_blocks(messages)
-    if len(tool_results) <= KEEP_RECENT_TOOL_RESULTS:
+    if len(tool_results) <= KEEP_RECENT_TOOL_RESULTS: #保留最后KEEP_RECENT_TOOL_RESULTS条tool_results结果
         return messages
 
     for _, _, block in tool_results[:-KEEP_RECENT_TOOL_RESULTS]:
         content = block.get("content", "")
-        if not isinstance(content, str) or len(content) <= 120:
+        if not isinstance(content, str) or len(content) <= 120: #过滤掉context纯字符串（即经过下面压缩的block）和长度没有超过限制的
             continue
         block["content"] = "[Earlier tool result compacted. Re-run the tool if you need full detail.]"
     return messages
 
 
-def write_transcript(messages: list) -> Path:   #不知道干嘛用的？？？？？？？？？？？？？？？
-    TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True)
+def write_transcript(messages: list) -> Path:   # 将messages写入到文件中，每次写入覆盖原文件
+    TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True) #创建TRANSCRIPT_DIR目录
     path = TRANSCRIPT_DIR / f"transcript_{int(time.time())}.jsonl"
-    with path.open("w") as handle:
+    with path.open("w") as handle: #将messages序列化为json格式写入文件中
         for message in messages:
             handle.write(json.dumps(message, default=str) + "\n")
     return path
 
 
 def summarize_history(messages: list) -> str:   #应该是对历史记录做摘要的
-    conversation = json.dumps(messages, default=str)[:80000]
+    conversation = json.dumps(messages, default=str)[:80000] #因为设置了context不会超过50000
     prompt = (
         "Summarize this coding-agent conversation so work can continue.\n"
         "Preserve:\n"
@@ -144,15 +144,16 @@ def summarize_history(messages: list) -> str:   #应该是对历史记录做摘�
         messages=[{"role": "user", "content": prompt}],
         max_tokens=2000,
     )
-    return response.content[0].text.strip()
+    return response.content[0].text.strip() #调用API总结摘要并返回
 
 
 def compact_history(messages: list, state: CompactState, focus: str | None = None) -> list: #应该是压缩context历史纪录的
-    transcript_path = write_transcript(messages)
+    transcript_path = write_transcript(messages) 
     print(f"[transcript saved: {transcript_path}]")
 
-    summary = summarize_history(messages)
-    if focus:
+    summary = summarize_history(messages) #通过调用API将messages摘要总结
+
+    if focus:   #如果是API调用compact工具自动压缩，在summary中添加API focus内容，并且将最近访问的5个文件目录添加到摘要中
         summary += f"\n\nFocus to preserve next: {focus}"
     if state.recent_files:
         recent_lines = "\n".join(f"- {path}" for path in state.recent_files)
@@ -311,11 +312,25 @@ def execute_tool(block, state: CompactState) -> str:    #tools_handlers工具分
 
 def agent_loop(messages: list, state: CompactState) -> None:
     while True:
-        messages[:] = micro_compact(messages)
+        messages[:] = micro_compact(messages) #messages[:]是对列表的切片赋值用法，表示从第一个元素开始重新赋值，本质上是修改原列表元素，不是重新赋值
+        '''
+        这一步完成后就已经完成以下步骤：
+        1、将所有tool_results收集到collect_tool_result_blocks列表中并添加了索引方便找回
+        2、只保留KEEP_RECENT_TOOL_RESULTS个tool_results的完整结果
+        3、其他的tool_results全部被占位符替代，即一句文本
+        '''
 
-        if estimate_context_size(messages) > CONTEXT_LIMIT:
+        if estimate_context_size(messages) > CONTEXT_LIMIT: #判断总体messages是否超过限制
             print("[auto compact]")
             messages[:] = compact_history(messages, state)
+        '''
+        这一步完成了以下步骤：
+        1、将最新messages写入到transcript_path文件中
+            每次写入的messages都是超过自定义context限制示且经过压缩的history和最新的API.response
+        2、将最新messages通过调用API总结摘要
+        3、将messages压缩为一个block块，即{role:"user",context:"..."}
+        4、更新compact_state状态
+        '''
 
         response = client.messages.create(
             model=MODEL,
