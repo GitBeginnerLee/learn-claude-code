@@ -278,7 +278,7 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "focus": {"type": "string"},
+                "focus": {"type": "string"}, #只有自动调用compact工具压缩上下文的时候才会有focus关键字
             },
         },
     },
