@@ -12,6 +12,66 @@ This teaching version keeps the compact model intentionally small:
 
 The goal is not to model every production branch. The goal is to make the
 active-context idea explicit and teachable.
+
+
+1、导入环境和包
+
+2、准备调用API参数
+	client
+	model
+	system
+	tools：schema
+	workdir
+
+3、创建类对象--方便后续直接使用类对象数据结构
+	CompactState 定义压缩状态
+
+4、工具调用入口execute_tool函数用来调用tools
+
+5、创建当前workplace路径：workdir
+6、tools指令前置安全沙箱：safe_path
+
+7、tools工具：
+	run_bash
+		persist_large_output方法：tool_results结果超过PERSIST_THRESHOLD限制自动压缩总结摘要
+	run_read
+		track_recent_file记录最近访问的5个文件
+		persist_large_output方法：tool_results结果超过PERSIST_THRESHOLD限制自动压缩总结摘要
+	run_write
+	run_edit
+	compact 这里只是一个文字提示，实际上调用compact在主loop中
+
+8、关于compact分了两个流程
+	系统自动compact
+		micro_compact方法：tool_results占位符替代压缩
+			collect_tool_result_blocks收集所有tool_results结果
+
+		estimate_context_size判断messages是否过长
+
+		compact_history方法：history超过限制强制压缩
+			write_transcript方法：将messages保存到文件中
+			summarize_history方法：压缩上下文
+
+	API调用compact工具
+		调用compact工具主动压缩，调用compact_history方法
+
+9、设置extract_text确保client端最终输出文本
+
+10、设置agent loop
+	对messages的tool_results进行压缩，即占位符替代tool_resualts
+	对messages上下文进行压缩，总结上下文摘要
+
+	调用API响应
+	判断tool_use
+	调用tool_use
+	output返回结果
+		判断是否调用compact工具
+		更新CompactState状态
+	结果追加messages
+
+12、设置初始化流程__name__
+
+
 """
 
 import json

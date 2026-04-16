@@ -279,7 +279,7 @@ TOOLS = [
             "required": ["path", "old_text", "new_text"],
         },
     },
-    { #添加了todo工具，用于更新计划。
+    { #添加了工具，用于更新计划。
         "name": "todo",
         "description": "Rewrite the current session plan for multi-step work.",
         "input_schema": {

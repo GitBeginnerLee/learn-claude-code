@@ -13,6 +13,42 @@ This file teaches the smallest useful coding-agent pattern:
 
 It intentionally keeps the loop small, but still makes the loop state explicit
 so later chapters can grow from the same structure.
+
+
+1、导入环境和包
+
+2、准备调用API参数
+	client
+	model
+	system
+	tools：schema
+
+
+3、创建类对象--方便后续直接使用类对象数据结构
+	LoopState ：显式收拢出一个循环状态，用来记录loop循环状态
+
+
+4、设置 run_one_turn
+		调用API返回响应
+		追加messages
+		判断tool_use
+			调用execute_tool_calls方法，执行工具调用
+			output接收执行结果
+		返回results
+		更新loopstate对象记录
+
+5、设置agent loop
+	调用run_one_turn方法启动
+
+6、设置初始化流程__name__
+	创建history
+	接受query输入
+	role信息追加history
+	创建loopstate对象记录
+	启动loop_agent
+	调用extract_text方法整理输出结果
+
+
 """
 
 import os

@@ -41,6 +41,62 @@ isolated tool context -- same pattern as this teaching implementation.
     | Agent definition  | hardcoded system | .claude/agents/*.md with YAML    |
     |                   | prompt           | frontmatter (AgentTemplate)      |
     +-------------------+------------------+----------------------------------+
+
+
+1、导入环境和包
+
+2、准备调用API参数
+	client
+	model
+	system
+	tools：schema
+	workdir
+	SUBAGENT_SYSTEM ：subagent的system prompt，要求最终返回messages的摘要总结
+
+3、创建类对象--方便后续直接使用类对象数据结构
+	AgentTemplate
+		这是一个模板解析器，用来解析角色智能体的配置文件，本代码文件中没有使用这个解析器
+		创建ai_agent = AgentTemplate(path)
+		1、读取配置文件路径
+		2、读取文件名
+		3、创建config配置信息空集
+		4、系统提示词
+		5、启动解析程序：_parse()
+
+4、工具调用入口TOOL_HANDLERS
+
+5、创建当前workplace路径：workdir
+6、tools指令前置安全沙箱：safe_path
+
+7、tools工具：
+	child_tools：
+		run_bash
+		run_read
+		run_write
+		run_edit
+	parent_tools：
+		child_tools
+		task ：调用subagent
+
+8、设置run_subagent
+		创建sub_messages
+		调用API返回响应
+		追加messages
+		判断tool_use
+
+		最终返回messages摘要总结
+
+9、设置agent loop
+	调用API返回响应
+	追加messages
+	判断tool_use
+		直接调用task，run_subagent，没有经过TOOL_HANDLERS工具箱分发
+		TOOL_HANDLERS工具调用
+	output结果追加messages
+
+10、设置初始化流程__name__
+
+
 """
 
 import os
@@ -156,7 +212,7 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
         return f"Error: {e}"
 
 
-TOOL_HANDLERS = { #缺少task调用方法，不知道准备用什么方式调用？？？？？？？？？？？？？？？？？？？？？？？？？？
+TOOL_HANDLERS = {
     "bash":       lambda **kw: run_bash(kw["command"]),
     "read_file":  lambda **kw: run_read(kw["path"], kw.get("limit")),
     "write_file": lambda **kw: run_write(kw["path"], kw["content"]),

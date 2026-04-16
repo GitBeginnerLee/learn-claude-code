@@ -39,11 +39,11 @@ Key insight: "The loop didn't change at all. I just added tools."
         user / assistant 消息必须严格交替 (不能连续两条同角色)
 
 
-1）messages结构规范化
-2）tool_use配对，缺失tool_result则补充占位符
-    收集tool_use_id
-    将messages中tool_use block中tool_use_id匹配，缺失的补充占位符
-3）将messages中连续role相同的做合并
+    1）messages结构规范化
+    2）tool_use配对，缺失tool_result则补充占位符
+        收集tool_use_id
+        将messages中tool_use block中tool_use_id匹配，缺失的补充占位符
+    3）将messages中连续role相同的做合并
 
 7、设置agent loop
 

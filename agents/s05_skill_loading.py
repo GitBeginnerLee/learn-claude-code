@@ -10,6 +10,60 @@ This chapter teaches a two-layer skill model:
 
 That keeps the prompt small while still giving the model access to reusable,
 task-specific guidance.
+
+
+
+1、导入环境和包
+
+2、准备调用API参数
+	client
+	model
+	system
+		增加skill_registry技能清单
+	tools：schema
+		增加load_sikll工具结构
+	workdir
+	SKILLS_DIR：skill文件目录
+
+3、创建三个类对象--方便后续直接使用类对象数据结构
+	SkillManifest ：技能清单数据结构
+	SkillDocument ：技能文档包含正文数据结构
+	SkillRegistry ：skill注册表
+
+4、工具调用入口TOOL_HANDLERS
+
+5、创建当前workplace路径：workdir
+6、tools指令前置安全沙箱：safe_path
+
+7、tools工具：
+	run_bash
+	run_read
+	run_write
+	run_edit
+	load_skill
+		load_full_text方法：将对应的skill文档输出给output结果
+
+8、创建SKILL_REGISTRY = SkillRegistry(SKILLS_DIR)
+	加载所有skill文档到内存中
+
+	_parse_frontmatter方法 ：解析skill文档，输出描述和正文
+	describe_available方法 ：将SkillManifest对象输出为文本字符串放入到stytem prompt
+
+	预处理SkillManifest结果
+	预处理SkillDocument结果
+
+9、设置extract_text确保client端最终输出文本
+
+10、设置agent loop
+	调用API返回响应
+	追加messages
+	判断tool_use
+	TOOL_HANDLERS工具调用
+	output结果追加messages
+
+12、设置初始化流程__name__
+
+
 """
 
 import os
