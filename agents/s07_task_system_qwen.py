@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # Harness: persistent tasks -- goals that outlive any single conversation.
 """
-s07_task_system.py - Tasks
+s07_task_system_qwen.py - Tasks (通义千问 Responses API)
+
+Same behavior as s07_task_system.py; uses DashScope compatible OpenAI SDK:
+  client.responses.create(model=..., instructions=..., input=..., tools=...)
+See tests/qwen_api_doc.md for parameters.
 
 Tasks persist as JSON files in .tasks/ so they survive context compression.
 Each task has a dependency graph (blockedBy).
@@ -20,46 +24,6 @@ Each task has a dependency graph (blockedBy).
          +--- completing task 1 removes it from task 2's blockedBy
 
 Key insight: "State that survives compression -- because it's outside the conversation."
-
-
-
-
-1、导入环境和包
-
-2、准备调用API参数
-	client
-	model
-	system
-	tools：schema
-
-	
-3、创建类对象--方便后续直接使用类对象数据结构
-	TaskManager ：管理task任务
-		_max_id ：统计task.json文件数量
-		_load ：读取json文件内容
-		_save ：创建task时将task内容存入磁盘
-		create ：task创建工具
-		get ：对_load读取的结果json结构化
-		update ：更新task的status和blockedBy
-		_clear_dependency ：清除task.json文件中的 blockedBy 中的task_id
-		list_all ：查询所有task.json文件，并将task整理成list清单	
-	
-4、TOOL_HANDLERS工具分发入口
-
-5、TOOLS说明书
-	
-5、设置agent_loop
-	
-	
-6、设置初始化流程__name__
-	创建history
-	接受query输入
-	role信息追加history
-	调用agent_loop
-	将messages整理输出
-
-
-
 """
 
 import json
@@ -67,16 +31,19 @@ import os
 import subprocess
 from pathlib import Path
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv(override=True)
 
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+# DashScope compatible-mode base URL (华北2 北京); override via DASHSCOPE_BASE_URL if needed.
+_DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 WORKDIR = Path.cwd()
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+client = OpenAI(
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url=os.getenv("DASHSCOPE_BASE_URL", _DEFAULT_QWEN_BASE_URL),
+)
 MODEL = os.environ["MODEL_ID"]
 TASKS_DIR = WORKDIR / ".tasks"  #新增task工作目录
 
@@ -113,11 +80,11 @@ class TaskManager:
         self._next_id += 1
         return json.dumps(task, indent=2, ensure_ascii=False)
 
-    def get(self, task_id: int) -> str: #加载 TASKS_DIR 目录下对应的 .json 文件并将内容输出为 json格式
+    def get(self, task_id: int) -> str:
         return json.dumps(self._load(task_id), indent=2, ensure_ascii=False)
 
     def update(self, task_id: int, status: str = None,
-               add_blocked_by: list = None, remove_blocked_by: list = None) -> str: #修改 TASKS_DIR 目录下的 .json 文件，更新 status、blockedBy
+               add_blocked_by: list = None, remove_blocked_by: list = None) -> str:
         task = self._load(task_id)
         if status:
             if status not in ("pending", "in_progress", "completed"):
@@ -128,11 +95,11 @@ class TaskManager:
         if add_blocked_by:
             task["blockedBy"] = list(set(task["blockedBy"] + add_blocked_by))
         if remove_blocked_by:
-            task["blockedBy"] = [x for x in task["blockedBy"] if x not in remove_blocked_by] #就是将blockedBy中的task_id做一个判断，保留不在remove_blocked_by中的task_id
+            task["blockedBy"] = [x for x in task["blockedBy"] if x not in remove_blocked_by]
         self._save(task)
         return json.dumps(task, indent=2, ensure_ascii=False)
 
-    def _clear_dependency(self, completed_id: int): #清除 TASKS_DIR 目录下.json文件中对应的 biockedBy 中的 task_id，即清除已完成task的任务依赖
+    def _clear_dependency(self, completed_id: int):
         """Remove completed_id from all other tasks' blockedBy lists."""
         for f in self.dir.glob("task_*.json"):
             task = json.loads(f.read_text())
@@ -142,9 +109,9 @@ class TaskManager:
 
     def list_all(self) -> str:
         tasks = []
-        files = sorted( #将可迭代对象排序
-            self.dir.glob("task_*.json"),   #查找目录中符合模式的文件，返回一个可迭代对象
-            key=lambda f: int(f.stem.split("_")[1]) #根据每个对象的 f 排序。f.stem 返回不带文件后缀的文件名，split 切割然后取值
+        files = sorted(
+            self.dir.glob("task_*.json"),
+            key=lambda f: int(f.stem.split("_")[1])
         )
         for f in files:
             tasks.append(json.loads(f.read_text()))
@@ -313,28 +280,69 @@ TOOLS = [
     },
 ]
 
+# Responses API custom tools: type function + parameters (JSON Schema); see qwen_api_doc.md
+QWEN_TOOLS = [
+    {
+        "type": "function",
+        "name": t["name"],
+        "description": t["description"],
+        "parameters": t["input_schema"],
+    }
+    for t in TOOLS
+]
+
+
+def _function_call_arguments(fc) -> dict:
+    raw = fc.arguments
+    if isinstance(raw, str):
+        return json.loads(raw)
+    if isinstance(raw, dict):
+        return raw
+    if hasattr(raw, "model_dump"):
+        return raw.model_dump()
+    return dict(raw)
+
 
 def agent_loop(messages: list):
     while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM, messages=messages,
-            tools=TOOLS, max_tokens=8000,
+        response = client.responses.create(
+            model=MODEL,
+            instructions=SYSTEM,
+            input=messages,
+            tools=QWEN_TOOLS,
         )
-        messages.append({"role": "assistant", "content": response.content})
-        if response.stop_reason != "tool_use":
+        out = response.output or []
+        function_calls = [it for it in out if getattr(it, "type", None) == "function_call"]
+        if not function_calls:
+            messages.append({"role": "assistant", "content": response.output_text or ""})
             return
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                handler = TOOL_HANDLERS.get(block.name)
-                try:
-                    output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
-                except Exception as e:
-                    output = f"Error: {e}"
-                print(f"> {block.name}:")
-                print(str(output)[:200])
-                results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)})
-        messages.append({"role": "user", "content": results})
+        for fc in function_calls:
+            handler = TOOL_HANDLERS.get(fc.name)
+            try:
+                args = _function_call_arguments(fc)
+            except Exception:
+                args = {}
+            try:
+                output = handler(**args) if handler else f"Unknown tool: {fc.name}"
+            except Exception as e:
+                output = f"Error: {e}"
+            print(f"> {fc.name}:")
+            print(str(output)[:200])
+            args_for_ctx = (
+                fc.arguments if isinstance(fc.arguments, str)
+                else json.dumps(args, ensure_ascii=False)
+            )
+            messages.append({
+                "type": "function_call",
+                "name": fc.name,
+                "arguments": args_for_ctx,
+                "call_id": fc.call_id,
+            })
+            messages.append({
+                "type": "function_call_output",
+                "call_id": fc.call_id,
+                "output": str(output),
+            })
 
 
 if __name__ == "__main__":
@@ -349,7 +357,9 @@ if __name__ == "__main__":
         history.append({"role": "user", "content": query})
         agent_loop(history)
         response_content = history[-1]["content"]
-        if isinstance(response_content, list):
+        if isinstance(response_content, str):
+            print(response_content)
+        elif isinstance(response_content, list):
             for block in response_content:
                 if hasattr(block, "text"):
                     print(block.text)
